@@ -1,0 +1,137 @@
+<script>
+function render() {
+  var lista = document.getElementById('lista');
+  var busca = document.getElementById('busca').value.trim().toLowerCase();
+  var min = parseInt(document.getElementById('min').value, 10) || 0;
+  var ord = document.getElementById('ord').value;
+
+  var vis = itens.filter(function (i) {
+    if (SELEC.indexOf(i.loja) < 0) return false;
+    if (busca && i.titulo.toLowerCase().indexOf(busca) < 0) return false;
+    if (!i.gratis && i.desc < min) return false;
+    return true;
+  });
+
+  vis.sort(function (a, b) {
+    if (a.gratis !== b.gratis) return a.gratis ? -1 : 1;
+    if (ord === 'preco') return a.por - b.por;
+    if (ord === 'nome') return a.titulo.localeCompare(b.titulo);
+    return b.desc - a.desc;
+  });
+
+  lista.textContent = '';
+  document.getElementById('vazio').style.display = vis.length ? 'none' : 'block';
+
+  vis.slice(0, 150).forEach(function (i) {
+    var li = document.createElement('li');
+    var img = document.createElement('img');
+    img.className = 'thumb';
+    img.loading = 'lazy';
+    if (i.img) img.src = i.img;
+    var info = document.createElement('div');
+    info.className = 'info';
+    var a = document.createElement('a');
+    a.className = 'tt';
+    a.href = i.url;
+    a.textContent = i.titulo;
+    var loja = document.createElement('div');
+    loja.className = 'loja';
+    loja.textContent = i.loja;
+    var pr = document.createElement('div');
+    pr.className = 'pr';
+    if (i.de > 0) {
+      var de = document.createElement('span');
+      de.className = 'de';
+      de.textContent = moeda(i.de, i.moeda, i.simbolo);
+      pr.appendChild(de);
+    }
+    var po = document.createElement('span');
+    po.className = 'po' + (i.gratis ? ' z' : '');
+    po.textContent = i.gratis ? 'Grátis' : moeda(i.por, i.moeda, i.simbolo);
+    pr.appendChild(po);
+    info.appendChild(a); info.appendChild(loja); info.appendChild(pr);
+    var d = document.createElement('span');
+    d.className = 'desc' + (i.gratis ? ' z' : '');
+    d.textContent = i.gratis ? 'GRÁTIS' : (i.desc > 0 ? '-' + i.desc + '%' : 'oferta');
+    li.appendChild(img); li.appendChild(info); li.appendChild(d);
+    lista.appendChild(li);
+  });
+}
+
+function aviso(t) { document.getElementById('aviso').textContent = t; }
+
+var FONTES = ['epic','gog','steam','cheapshark','thunder','ig','nuuvem'];
+
+function buscarTudo() {
+  if (carregando) return;
+  carregando = true;
+  document.getElementById('att').disabled = true;
+  aviso('Buscando ofertas...');
+
+  var faltam = FONTES.length;
+  var terminou = false;
+
+  function passo() {
+    faltam--;
+    if (faltam <= 0 && !terminou) { terminou = true; terminar(); }
+  }
+
+  window.receber = function (fonte, texto) {
+    juntar(normalizar(fonte, texto));
+    render();
+    passo();
+  };
+  window.receberHtml = function (fonte, html) {
+    juntar(normalizarHtml(fonte, html));
+    render();
+    passo();
+  };
+  window.falhou = function () { passo(); };
+
+  FONTES.forEach(function (f) {
+    if (window.AndroidBridge && window.AndroidBridge.buscar) window.AndroidBridge.buscar(f);
+    else passo();
+  });
+
+  setTimeout(function () {
+    if (!terminou) { terminou = true; terminar(); }
+  }, 35000);
+}
+
+function terminar() {
+  carregando = false;
+  document.getElementById('att').disabled = false;
+  aviso(itens.length ? itens.length + ' ofertas carregadas.' : 'Não foi possível carregar agora. Tente de novo.');
+  try { localStorage.setItem('ofertas', JSON.stringify({ ts: Date.now(), itens: itens })); } catch (e) {}
+  render();
+}
+
+(function iniciar() {
+  var box = document.getElementById('lojas');
+  LOJAS.forEach(function (l) {
+    var c = document.createElement('button');
+    c.className = 'chip on';
+    c.textContent = l;
+    c.addEventListener('click', function () {
+      var i = SELEC.indexOf(l);
+      if (i >= 0) { SELEC.splice(i, 1); c.classList.remove('on'); }
+      else { SELEC.push(l); c.classList.add('on'); }
+      render();
+    });
+    box.appendChild(c);
+  });
+
+  document.getElementById('busca').addEventListener('input', render);
+  document.getElementById('min').addEventListener('change', render);
+  document.getElementById('ord').addEventListener('change', render);
+  document.getElementById('att').addEventListener('click', buscarTudo);
+
+  try {
+    var c = JSON.parse(localStorage.getItem('ofertas') || 'null');
+    if (c && c.itens) { itens = c.itens; render(); }
+    if (!c || Date.now() - c.ts > 20 * 60000) buscarTudo();
+  } catch (e) { buscarTudo(); }
+})();
+</script>
+</body>
+</html>
