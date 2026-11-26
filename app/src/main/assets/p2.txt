@@ -1,0 +1,39 @@
+<body>
+<div class="head">
+  <div>
+    <h1>Ofertas do Dia</h1>
+    <p class="sub">Jogos grátis e em promoção agora</p>
+  </div>
+  <button class="bt" id="att">Atualizar</button>
+</div>
+<p class="cred">Criado por Phillip Almeida</p>
+
+<div class="barra">
+  <input id="busca" placeholder="Buscar jogo" autocomplete="off">
+  <div class="lin" id="lojas"></div>
+  <div class="duas">
+    <div>
+      <label class="rot" for="min">Desconto mínimo</label>
+      <select id="min">
+        <option value="0">Qualquer</option>
+        <option value="30">30% ou mais</option>
+        <option value="50">50% ou mais</option>
+        <option value="70">70% ou mais</option>
+        <option value="90">90% ou mais</option>
+      </select>
+    </div>
+    <div>
+      <label class="rot" for="ord">Ordenar por</label>
+      <select id="ord">
+        <option value="desc">Maior desconto</option>
+        <option value="preco">Menor preço</option>
+        <option value="nome">Nome</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<div id="aviso"></div>
+<ul id="lista"></ul>
+<div class="msg" id="vazio" style="display:none">Nada por aqui ainda. Toque em Atualizar.</div>
+<p class="foot">Preços e disponibilidade mudam rápido. Confira na loja antes de comprar.</p>
