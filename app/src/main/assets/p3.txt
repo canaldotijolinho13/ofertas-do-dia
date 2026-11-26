@@ -1,0 +1,127 @@
+<script>
+var LOJAS = ['Steam','Epic Games','GOG','GreenManGaming','Nuuvem','Instant Gaming','ThunderKeys','Humble','Fanatical','WinGameStore','GameBillet'];
+var SELEC = LOJAS.slice();
+var itens = [];
+var carregando = false;
+
+function moeda(v, m, simb) {
+  var s = simb || (m === 'BRL' ? 'R$' : m === 'EUR' ? '€' : '$');
+  return s + ' ' + v.toFixed(2).replace('.', ',');
+}
+function chave(loja, titulo) { return (loja + '|' + titulo).toLowerCase(); }
+
+function precoDe(txt) {
+  var m = String(txt).match(/(R\$|€|\$)\s*([\d.]*\d,\d{2}|\d+\.\d{2})/);
+  if (!m) return null;
+  var v = parseFloat(m[2].replace(/\./g, '').replace(',', '.'));
+  if (isNaN(v)) return null;
+  return { simb: m[1], v: v };
+}
+
+function normalizar(fonte, texto) {
+  var out = [];
+  var j;
+  try { j = JSON.parse(texto); } catch (e) { return out; }
+
+  if (fonte === 'epic') {
+    var els = (((j.data || {}).Catalog || {}).searchStore || {}).elements || [];
+    els.forEach(function (e) {
+      var p = ((e.price || {}).totalPrice) || {};
+      if (p.discountPrice !== 0) return;
+      var slug = e.productSlug || e.urlSlug || '';
+      if (!slug) return;
+      var img = null;
+      (e.keyImages || []).forEach(function (k) { if (k.type === 'Thumbnail' && !img) img = k.url; });
+      out.push({ loja: 'Epic Games', titulo: e.title, url: 'https://store.epicgames.com/pt-BR/p/' + String(slug).replace('-/home',''), img: img, de: (p.originalPrice || 0) / 100, por: 0, moeda: 'BRL', desc: 100 });
+    });
+  }
+
+  if (fonte === 'gog') {
+    (j.products || []).forEach(function (p) {
+      var pr = p.price || {};
+      if (String(pr.final) !== '0') return;
+      var base = parseFloat(pr.base || 0);
+      if (!base) return;
+      out.push({ loja: 'GOG', titulo: p.title, url: 'https://www.gog.com/game/' + String(p.url || '').replace(/[^a-z0-9\-]/g, ''), img: 'https:' + (p.image || ''), de: base, por: 0, moeda: 'BRL', desc: 100 });
+    });
+  }
+
+  if (fonte === 'steam') {
+    (((j.specials || {}).items) || []).forEach(function (i) {
+      if (!i.discounted) return;
+      var f = (i.final_price || 0) / 100, o = (i.original_price || 0) / 100;
+      if (!o) return;
+      out.push({ loja: 'Steam', titulo: i.name, url: 'https://store.steampowered.com/app/' + i.id + '/', img: i.large_capsule_image || i.header_image, de: o, por: f, moeda: 'BRL', desc: f === 0 ? 100 : (i.discount_percent || 0) });
+    });
+  }
+
+  if (fonte === 'cheapshark') {
+    var mapa = { '1':'Steam', '3':'GreenManGaming', '7':'GOG', '11':'Humble', '15':'Fanatical', '21':'WinGameStore', '23':'GameBillet', '25':'Epic Games' };
+    (j || []).forEach(function (d) {
+      var s = parseFloat(d.salePrice), n = parseFloat(d.normalPrice), sv = parseFloat(d.savings);
+      if (!n || !(sv >= 20)) return;
+      out.push({ loja: mapa[d.storeID] || 'Loja', titulo: d.title, url: 'https://www.cheapshark.com/redirect?dealID=' + d.dealID, img: d.thumb, de: n, por: s, moeda: 'USD', desc: Math.round(sv) });
+    });
+  }
+
+  if (fonte === 'thunder') {
+    (j.products || []).forEach(function (p) {
+      var v = (p.variants || [])[0] || {};
+      var de = parseFloat(v.compare_at_price), por = parseFloat(v.price);
+      if (!de || !por || de <= por) return;
+      var img = (p.images || [])[0];
+      out.push({ loja: 'ThunderKeys', titulo: p.title, url: 'https://thunderkeys.com/products/' + p.handle, img: img ? img.src : null, de: de, por: por, moeda: 'BRL', simbolo: 'R$', desc: Math.round((1 - por / de) * 100) });
+    });
+  }
+
+  out.forEach(function (o) { o.gratis = o.por === 0; });
+  return out;
+}
+
+function normalizarHtml(fonte, html) {
+  var out = [];
+  var doc;
+  try { doc = new DOMParser().parseFromString(html, 'text/html'); } catch (e) { return out; }
+
+  if (fonte === 'ig') {
+    doc.querySelectorAll('article.item, div.item').forEach(function (el) {
+      var a = el.querySelector('a[href]');
+      if (!a) return;
+      var img = el.querySelector('img[data-src], img[src]');
+      var tit = el.querySelector('.title, h3, .name');
+      var txt = el.textContent || '';
+      var pr = precoDe(txt);
+      if (!pr) return;
+      var dm = String(txt).match(/(\d{1,2})\s*%/);
+      out.push({ loja: 'Instant Gaming', titulo: (tit && tit.textContent.trim()) || (img && img.alt) || 'Jogo', url: a.href, img: img ? (img.getAttribute('data-src') || img.src) : null, de: 0, por: pr.v, moeda: 'EUR', simbolo: pr.simb, desc: dm ? parseInt(dm[1], 10) : 0 });
+    });
+  }
+
+  if (fonte === 'nuuvem') {
+    doc.querySelectorAll('a[href*="/item/"]').forEach(function (a) {
+      var card = a.closest('div') || a;
+      var txt = card.textContent || '';
+      var pr = precoDe(txt);
+      if (!pr) return;
+      var img = card.querySelector('img');
+      var tit = (img && img.alt) || a.getAttribute('title') || '';
+      if (!tit) return;
+      out.push({ loja: 'Nuuvem', titulo: tit.trim(), url: a.href, img: img ? (img.getAttribute('data-src') || img.src) : null, de: 0, por: pr.v, moeda: 'BRL', simbolo: pr.simb, desc: 0 });
+    });
+  }
+
+  return out;
+}
+
+function juntar(novos) {
+  var vistos = {};
+  itens.forEach(function (i) { vistos[chave(i.loja, i.titulo)] = true; });
+  novos.forEach(function (n) {
+    var k = chave(n.loja, n.titulo);
+    if (vistos[k]) return;
+    vistos[k] = true;
+    n.id = k;
+    itens.push(n);
+  });
+}
+</script>
